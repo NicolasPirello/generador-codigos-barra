@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Generador de Códigos de Barras – Kiosco</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+</head>
+<body>
+  <header>
+    <h1>🏪 Generador de Códigos de Barras – Kiosco</h1>
+  </header>
+
+  <div class="container">
+    <section class="config-panel">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="prefix">Prefijo</label>
+          <input id="prefix" class="form-input" type="text" placeholder="KIO-" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="digits">Longitud numérica</label>
+          <input id="digits" class="form-input" type="number" min="1" max="12" placeholder="4" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="next">Próximo número</label>
+          <input id="next" class="form-input" type="number" min="1" placeholder="1" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="item">Nombre del artículo</label>
+          <input id="item" class="form-input" type="text" placeholder="Ej.: Empanada JyQ" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="count">Cantidad</label>
+          <input id="count" class="form-input" type="number" value="1" min="1" max="999" />
+        </div>
+      </div>
+      
+      <div class="button-group">
+        <button id="add" class="btn btn-primary">
+          ➕ Agregar a la lista
+        </button>
+        <button id="print" class="btn btn-secondary">
+          🖨️ Imprimir
+        </button>
+        <button id="exportPdf" class="btn btn-secondary">
+          📄 Exportar PDF
+        </button>
+        <button id="reset" class="btn btn-danger">
+          🗑️ Reiniciar todo
+        </button>
+      </div>
+
+      <div class="api-section">
+        <div class="api-form">
+          <div class="form-group">
+            <label class="form-label" for="apiKeyInput">API Key (opcional)</label>
+            <input id="apiKeyInput" class="form-input" type="password" placeholder="Ingresa tu clave API" />
+          </div>
+          <button id="saveKey" class="btn btn-secondary">💾 Guardar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="labels-section">
+      <div class="labels-grid" id="preview">
+        <div class="empty-state">
+          <div class="empty-state-icon">📦</div>
+          <div class="empty-state-title">No hay etiquetas generadas</div>
+          <div class="empty-state-description">Completa los campos y haz clic en "Agregar a la lista" para generar códigos de barras</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const state = { rows:[], meta:{ prefix:'KIO-', digits:4, next:1 } };
+
+    // Gestión de API Key
+    function getKey(){ return localStorage.getItem('kioscoApiKey') || ''; }
+    function setKey(v){ localStorage.setItem('kioscoApiKey', v || ''); }
+    $('apiKeyInput').value = getKey();
+    $('saveKey').onclick = ()=>{ setKey($('apiKeyInput').value.trim()); alert('Clave guardada'); };
+
+    async function api(path, opts={}){
+      const headers = Object.assign({ 'Content-Type':'application/json' }, opts.headers||{});
+      const key = getKey();
+      if (key) headers['x-api-key'] = key;
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      if(res.status===401){
+        const k = prompt('Este servidor requiere API Key (x-api-key). Ingrésala:');
+        if(k!==null){ setKey(k); $('apiKeyInput').value = k; return api(path, opts); }
+      }
+      if(!res.ok){ const t = await res.text(); throw new Error(t || ('HTTP '+res.status)); }
+      return res.json();
+    }
+
+    function pad(num, width){
+      let s = String(num);
+      return s.length>=width?s:'0'.repeat(width-s.length)+s;
+    }
+
+    function makeCode(value){
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      JsBarcode(svg,value,{format:'CODE128',displayValue:true,fontSize:14});
+      return svg;
+    }
+
+    function buildLabel(title,code,index){
+      const card=document.createElement('div');card.className='label-card';
+      
+      const head=document.createElement('div');head.className='label-title';head.textContent=title;
+      
+      const body=document.createElement('div');body.className='label-barcode';body.appendChild(makeCode(code));
+      
+      const foot=document.createElement('div');foot.className='label-code';foot.textContent=code;
+      
+      const actions=document.createElement('div');actions.className='label-actions';
+      
+      const edit=document.createElement('button');edit.textContent='✏️ Editar';edit.className='btn btn-small btn-secondary';
+      edit.onclick=async ()=>{
+        const nuevoNombre=prompt('Nuevo nombre para '+code,state.rows[index].art);
+        if(nuevoNombre!==null){
+          try{
+            const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({art:nuevoNombre})});
+            state.rows[index].art = updated.art;
+            head.textContent = updated.art;
+          }catch(e){ alert('Error al actualizar: '+e.message); }
+        }
+      };
+      
+      const editCode=document.createElement('button');editCode.textContent='🔢 Código';editCode.className='btn btn-small btn-secondary';
+      editCode.onclick=async ()=>{
+        const actual = state.rows[index].code;
+        const nuevoCodigo = prompt('Nuevo código de barras para '+actual, actual);
+        if(nuevoCodigo!==null){
+          const trimmed = nuevoCodigo.trim();
+          if(!trimmed) { alert('El código no puede estar vacío'); return; }
+          try{
+            const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({code:trimmed})});
+            state.rows[index].code = updated.code;
+            foot.textContent = updated.code;
+            body.innerHTML='';
+            body.appendChild(makeCode(updated.code));
+          }catch(e){ alert('Error al actualizar código: '+e.message); }
+        }
+      };
+      
+      const deleteBtn=document.createElement('button');deleteBtn.textContent='🗑️';deleteBtn.className='btn btn-small btn-danger';
+      deleteBtn.onclick=async ()=>{
+        if(confirm('¿Eliminar la etiqueta "'+title+'"?')){
+          try{
+            await api('/api/labels/'+state.rows[index].id,{method:'DELETE'});
+            state.rows.splice(index,1);
+            renderAll();
+          }catch(e){ alert('Error al eliminar: '+e.message); }
+        }
+      };
+      
+      actions.append(edit,editCode,deleteBtn);
+      card.append(head,body,foot,actions);
+      return card;
+    }
+
+    function renderAll(){
+      const preview = $('preview');
+      preview.innerHTML='';
+      
+      if(state.rows.length === 0) {
+        preview.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <div class="empty-state-title">No hay etiquetas generadas</div>
+            <div class="empty-state-description">Completa los campos y haz clic en "Agregar a la lista" para generar códigos de barras</div>
+          </div>
+        `;
+        return;
+      }
+      
+      state.rows.forEach((r,i)=>{
+        preview.appendChild(buildLabel(r.art,r.code,i));
+      });
+    }
+
+    async function syncState(){
+      try{
+        const meta = await api('/api/state');
+        state.meta = meta;
+        $('prefix').value = meta.prefix;
+        $('digits').value = meta.digits;
+        $('next').value = meta.next;
+      }catch(e){ console.error(e); }
+    }
+
+    async function syncLabels(){
+      try{
+        const rows = await api('/api/labels');
+        state.rows = rows;
+        renderAll();
+      }catch(e){ console.error(e); }
+    }
+
+    async function addBatch(){
+      const item=$('item').value.trim();
+      const count=Number($('count').value)||1;
+      if(!item){ alert('Ingresá el nombre del artículo'); return; }
+      try{
+        const resp = await api('/api/labels/generate',{method:'POST',body:JSON.stringify({count,item})});
+        state.rows.push(...resp.added);
+        state.meta = resp.state;
+        $('next').value = state.meta.next;
+        renderAll();
+      }catch(e){ alert('Error al generar: '+e.message); }
+    }
+
+    async function saveConfig(){
+      const prefix=$('prefix').value.trim();
+      const digits=Number($('digits').value)||4;
+      const next=Number($('next').value)||1;
+      try{
+        const meta = await api('/api/state',{method:'PATCH',body:JSON.stringify({prefix,digits,next})});
+        state.meta = meta;
+        alert('Configuración actualizada');
+      }catch(e){ alert('Error al guardar configuración: '+e.message); }
+    }
+
+    async function reset(){
+      if(!confirm('Esto eliminará todas las etiquetas y reiniciará el correlativo. ¿Continuar?')) return;
+      try{
+        const resp = await api('/api/labels',{method:'DELETE'});
+        state.rows = [];
+        state.meta = resp.state;
+        $('prefix').value = state.meta.prefix;
+        $('digits').value = state.meta.digits;
+        $('next').value = state.meta.next;
+        renderAll();
+      }catch(e){ alert('Error al reiniciar: '+e.message); }
+    }
+
+    async function exportPDF(){
+      if(!state.rows.length){alert('Agregá etiquetas primero');return;}
+      const {jsPDF}=window.jspdf;
+      const pdf=new jsPDF();
+      const canvas=await html2canvas($('preview'));
+      const img=canvas.toDataURL('image/png');
+      const imgProps=pdf.getImageProperties(img);
+      const pdfWidth=pdf.internal.pageSize.getWidth();
+      const pdfHeight=(imgProps.height*pdfWidth)/imgProps.width;
+      pdf.addImage(img,'PNG',0,0,pdfWidth,pdfHeight);
+      pdf.save('etiquetas.pdf');
+    }
+
+    $('add').onclick=addBatch;
+    $('reset').onclick=reset;
+    $('print').onclick=()=>window.print();
+    $('exportPdf').onclick=exportPDF;
+
+    $('prefix').addEventListener('change', saveConfig);
+    $('digits').addEventListener('change', saveConfig);
+    $('next').addEventListener('change', saveConfig);
+
+    // Inicio
+    (async ()=>{ await syncState(); await syncLabels(); })();
+  </script>
+</body>
+</html>
