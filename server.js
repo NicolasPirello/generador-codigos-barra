@@ -5,7 +5,6 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3201;
 const API_KEY = process.env.API_KEY || null; // Opcional: establece una API_KEY en Dockploy para proteger el acceso
-
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
@@ -14,7 +13,7 @@ function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
     const initial = {
-      state: { prefix: 'KIO-', digits: 4, next: 1 },
+      state: { prefix: 'KIOSCO-922-', digits: 5, next: 1 },
       labels: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
@@ -78,7 +77,7 @@ app.post('/api/labels/generate', (req, res) => {
   const c = Number(count) || 1;
   if (c < 1 || c > 999) return res.status(400).json({ error: 'count debe estar entre 1 y 999' });
   const art = String(item || '').trim();
-  if (!art) return res.status(400).json({ error: 'item (nombre del artículo) es requerido' });
+  if (!art) art = 'Artículo sin nombre'; // Valor por defecto si no se proporciona nombre
 
   const db = loadDB();
   const { prefix, digits } = db.state;

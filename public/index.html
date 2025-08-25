@@ -23,7 +23,7 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label" for="prefix">Prefijo</label>
-          <input id="prefix" class="form-input" type="text" placeholder="KIO-" />
+          <input id="prefix" class="form-input" type="text" placeholder="KIOSCO-922-" />
         </div>
         <div class="form-group">
           <label class="form-label" for="digits">Longitud numérica</label>
@@ -82,7 +82,7 @@
 
   <script>
     const $ = id => document.getElementById(id);
-    const state = { rows:[], meta:{ prefix:'KIO-', digits:4, next:1 } };
+    const state = { rows:[], meta:{ prefix:'KIOSCO-922-', digits:5, next:1 } };
 
     // Gestión de API Key
     function getKey(){ return localStorage.getItem('kioscoApiKey') || ''; }

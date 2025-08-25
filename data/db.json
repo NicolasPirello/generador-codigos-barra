@@ -1,27 +1,8 @@
 {
   "state": {
-    "prefix": "KIO-",
-    "digits": 4,
-    "next": 4
+    "prefix": "KIOSCO-922-",
+    "digits": 5,
+    "next": 1
   },
-  "labels": [
-    {
-      "id": 1,
-      "code": "KIO-0001",
-      "art": "Empanada de Jamon y Queso",
-      "createdAt": "2025-08-24T23:21:06.888Z"
-    },
-    {
-      "id": 2,
-      "code": "KIO-0002",
-      "art": "Ensalada Caesar",
-      "createdAt": "2025-08-24T23:25:45.402Z"
-    },
-    {
-      "id": 3,
-      "code": "KIO-0003",
-      "art": "Empanadas de Carne",
-      "createdAt": "2025-08-24T23:25:53.204Z"
-    }
-  ]
+  "labels": []
 }
