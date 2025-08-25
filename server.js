@@ -21,6 +21,9 @@ function getPortFromArgs() {
   return null;
 }
 const PORT = getPortFromArgs() || process.env.PORT || 3201;
+// NUEVO: configuración por variables de entorno (con valores por defecto seguros)
+const PREFIX = process.env.BARCODE_PREFIX || 'KIOSCO-922-';
+const DIGITS = Number(process.env.BARCODE_DIGITS || 5);
 const API_KEY = process.env.API_KEY || null; // Opcional: establece una API_KEY en Dockploy para proteger el acceso
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
@@ -29,24 +32,44 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
-    const initial = {
-      state: { prefix: 'KIOSCO-922-', digits: 5, next: 1, nameSeq: 1 },
-      labels: []
-    };
+    const initial = { labels: [] }; // Ya no persistimos "state"
     fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
   }
 }
 function loadDB() {
   ensureDataFile();
   const raw = fs.readFileSync(DB_FILE, 'utf-8');
-  return JSON.parse(raw);
+  let parsed = {};
+  try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+  if (!parsed || typeof parsed !== 'object') parsed = {};
+  if (!Array.isArray(parsed.labels)) parsed.labels = [];
+  return parsed;
 }
 function saveDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+  // Garantiza que sólo se guarden las etiquetas (no "state").
+  const toSave = { labels: Array.isArray(db.labels) ? db.labels : [] };
+  fs.writeFileSync(DB_FILE, JSON.stringify(toSave, null, 2), 'utf-8');
 }
 function pad(num, width) {
   const s = String(num);
   return s.length >= width ? s : '0'.repeat(width - s.length) + s;
+}
+// Derivar el siguiente correlativo a partir de los códigos existentes
+function getDerivedNext(labels) {
+  let max = 0;
+  for (const r of labels || []) {
+    if (!r || typeof r.code !== 'string') continue;
+    const m = r.code.match(/(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  return max + 1;
+}
+// Derivar el siguiente número para nombres automáticos (simple: cantidad+1)
+function getDerivedNameSeq(labels) {
+  return (Array.isArray(labels) ? labels.length : 0) + 1;
 }
 
 // Middleware
@@ -62,27 +85,18 @@ app.use((req, res, next) => {
 
 // Endpoints API
 app.get('/api/state', (req, res) => {
-  const { state } = loadDB();
-  res.json(state);
+  const db = loadDB();
+  const next = getDerivedNext(db.labels);
+  const nameSeq = getDerivedNameSeq(db.labels);
+  res.json({ prefix: PREFIX, digits: DIGITS, next, nameSeq });
 });
 
 app.patch('/api/state', (req, res) => {
+  // Estado controlado por variables de entorno. Ignoramos modificaciones para evitar riesgos.
   const db = loadDB();
-  const allowed = ['digits', 'next'];
-  for (const k of allowed) {
-    if (k in req.body) {
-      if (k === 'digits' || k === 'next') {
-        const v = Number(req.body[k]);
-        if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: `Valor inválido para ${k}` });
-        db.state[k] = v;
-      }
-    }
-  }
-  // Fuerza prefijo fijo desde servidor por seguridad
-  db.state.prefix = 'KIOSCO-922-';
-  if (typeof db.state.nameSeq !== 'number' || db.state.nameSeq < 1) db.state.nameSeq = 1;
-  saveDB(db);
-  res.json(db.state);
+  const next = getDerivedNext(db.labels);
+  const nameSeq = getDerivedNameSeq(db.labels);
+  res.json({ prefix: PREFIX, digits: DIGITS, next, nameSeq });
 });
 
 app.get('/api/labels', (req, res) => {
@@ -94,13 +108,11 @@ app.post('/api/labels/generate', (req, res) => {
   const { count, item } = req.body || {};
   const c = Number(count) || 1;
   if (c < 1 || c > 999) return res.status(400).json({ error: 'count debe estar entre 1 y 999' });
-  let art = typeof item === 'string' ? item.trim() : '';
+  const providedArt = typeof item === 'string' ? item.trim() : '';
 
   const db = loadDB();
-  if (typeof db.state.nameSeq !== 'number' || db.state.nameSeq < 1) db.state.nameSeq = 1;
-
-  const { prefix, digits } = db.state;
-  let { next, nameSeq } = db.state;
+  const nextStart = getDerivedNext(db.labels);
+  const nameSeqStart = getDerivedNameSeq(db.labels);
 
   const added = [];
   const now = new Date().toISOString();
@@ -108,18 +120,19 @@ app.post('/api/labels/generate', (req, res) => {
   const nextIdStart = (db.labels.reduce((max, r) => Math.max(max, r.id || 0), 0) || 0) + 1;
 
   for (let i = 0; i < c; i++) {
-    const code = `${prefix}${pad(next + i, digits)}`;
+    const code = `${PREFIX}${pad(nextStart + i, DIGITS)}`;
     const id = nextIdStart + i;
-    const title = art || `Articulo ${pad(nameSeq + i, 2)}`;
+    const title = providedArt || `Articulo ${pad(nameSeqStart + i, 2)}`;
     added.push({ id, code, art: title, createdAt: now });
   }
-  // persistir
+  // persistir sólo etiquetas
   db.labels.push(...added);
-  db.state.next = next + c;
-  if (!art) db.state.nameSeq = nameSeq + c;
   saveDB(db);
 
-  res.json({ added, state: db.state });
+  // responder con estado derivado actual
+  const next = getDerivedNext(db.labels);
+  const nameSeq = getDerivedNameSeq(db.labels);
+  res.json({ added, state: { prefix: PREFIX, digits: DIGITS, next, nameSeq } });
 });
 
 app.put('/api/labels/:id', (req, res) => {
@@ -150,7 +163,6 @@ app.delete('/api/labels/:id', (req, res) => {
   saveDB(db);
   res.json({ ok: true });
 });
-
 
 // Servir frontend estático
 const PUBLIC_DIR = path.join(__dirname, 'public');

@@ -281,12 +281,27 @@
     $('print').onclick=()=>window.print();
     $('exportPdf').onclick=exportPDF;
 
-    // Ya no es editable ni se guarda el prefijo
-    $('digits').addEventListener('change', saveConfig);
-    $('next').addEventListener('change', saveConfig);
-
-    // Inicio
-    (async ()=>{ await syncState(); await syncLabels(); })();
+    // Lee configuración del backend (state) y bloquea el input de prefijo para mostrarlo pero no permitir editarlo.
+    async function loadState() {
+      const res = await fetch('/api/state');
+      if (!res.ok) throw new Error('No se pudo obtener el estado');
+      const s = await res.json();
+      // Inputs existentes
+      const prefixInput = document.getElementById('prefix');
+      const digitsInput = document.getElementById('digits');
+      if (prefixInput) {
+        prefixInput.value = s.prefix || '';
+        prefixInput.readOnly = true;
+      }
+      if (digitsInput) {
+        digitsInput.value = s.digits != null ? s.digits : '';
+        digitsInput.readOnly = true;
+      }
+    }
+    // Llamar loadState en el inicio
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState().catch(console.error);
+    });
 
     async function exportPDF(){
       if(!state.rows.length){

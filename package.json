@@ -1,14 +1,14 @@
 {
   "name": "kiosco-barcodes",
   "version": "1.0.0",
-  "description": "Aplicación web para generar y persistir códigos de barras (Kiosco)",
   "main": "server.js",
-  "type": "commonjs",
+  "license": "MIT",
   "scripts": {
     "start": "node server.js"
   },
-  "author": "",
-  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "express": "^4.19.2"
   }

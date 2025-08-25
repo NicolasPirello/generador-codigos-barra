@@ -1,16 +1,40 @@
 {
-  "state": {
-    "prefix": "KIOSCO-922-",
-    "digits": 5,
-    "next": 6,
-    "nameSeq": 5
-  },
   "labels": [
     {
       "id": 1,
       "code": "KIOSCO-922-00005",
       "art": "Empanada",
       "createdAt": "2025-08-25T02:07:27.903Z"
+    },
+    {
+      "id": 2,
+      "code": "KIOSCO-922-00006",
+      "art": "Articulo 05",
+      "createdAt": "2025-08-25T02:27:13.931Z"
+    },
+    {
+      "id": 3,
+      "code": "KIOSCO-922-00007",
+      "art": "Articulo 03",
+      "createdAt": "2025-08-25T02:36:22.809Z"
+    },
+    {
+      "id": 4,
+      "code": "KIOSCO-922-00008",
+      "art": "dasd",
+      "createdAt": "2025-08-25T02:36:24.959Z"
+    },
+    {
+      "id": 5,
+      "code": "KIOSCO-922-00009",
+      "art": "Empanada",
+      "createdAt": "2025-08-25T02:36:31.567Z"
+    },
+    {
+      "id": 6,
+      "code": "KIOSCO-922-00010",
+      "art": "Empanadas",
+      "createdAt": "2025-08-25T02:42:33.768Z"
     }
   ]
 }

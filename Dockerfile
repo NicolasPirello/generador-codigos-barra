@@ -9,6 +9,8 @@ COPY package*.json ./
 RUN npm ci --only=production || npm install --only=production
 
 # Copiar código
+ARG BUILD_TAG
+ENV BUILD_TAG=$BUILD_TAG
 COPY . .
 
 # Variables opcionales:
