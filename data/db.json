@@ -2,7 +2,15 @@
   "state": {
     "prefix": "KIOSCO-922-",
     "digits": 5,
-    "next": 1
+    "next": 6,
+    "nameSeq": 5
   },
-  "labels": []
+  "labels": [
+    {
+      "id": 1,
+      "code": "KIOSCO-922-00005",
+      "art": "Empanada",
+      "createdAt": "2025-08-25T02:07:27.903Z"
+    }
+  ]
 }

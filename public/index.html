@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Generador de Códigos de Barras – Kiosco</title>
+  <title>Generador de Códigos de Barras - Kiosco</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,7 @@
 </head>
 <body>
   <header>
-    <h1>🏪 Generador de Códigos de Barras – Kiosco</h1>
+    <h1>🏪 Generador de Códigos de Barras - Kiosco V2</h1>
   </header>
 
   <div class="container">
@@ -23,11 +23,11 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label" for="prefix">Prefijo</label>
-          <input id="prefix" class="form-input" type="text" placeholder="KIOSCO-922-" />
+          <input id="prefix" class="form-input" type="text" placeholder="KIOSCO-922-" disabled title="Prefijo fijo" />
         </div>
         <div class="form-group">
           <label class="form-label" for="digits">Longitud numérica</label>
-          <input id="digits" class="form-input" type="number" min="1" max="12" placeholder="4" />
+          <input id="digits" class="form-input" type="number" min="1" max="12" placeholder="5" />
         </div>
         <div class="form-group">
           <label class="form-label" for="next">Próximo número</label>
@@ -53,9 +53,6 @@
         <button id="exportPdf" class="btn btn-secondary">
           📄 Exportar PDF
         </button>
-        <button id="reset" class="btn btn-danger">
-          🗑️ Reiniciar todo
-        </button>
       </div>
 
       <div class="api-section">
@@ -80,9 +77,24 @@
     </section>
   </div>
 
+  <!-- Modal reutilizable -->
+  <div id="modalOverlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div id="modalTitle" class="modal-title"></div>
+        <button id="modalClose" class="modal-close" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn btn-secondary">Cancelar</button>
+        <button id="modalConfirm" class="btn btn-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const $ = id => document.getElementById(id);
-    const state = { rows:[], meta:{ prefix:'KIOSCO-922-', digits:5, next:1 } };
+    const state = { rows:[], meta:{ prefix:'', digits:0, next:0 } };
 
     // Gestión de API Key
     function getKey(){ return localStorage.getItem('kioscoApiKey') || ''; }
@@ -114,6 +126,36 @@
       return svg;
     }
 
+    // Utilidades de modal
+    const modalEl = $('modalOverlay');
+    const modalTitle = $('modalTitle');
+    const modalBody = $('modalBody');
+    const modalCancel = $('modalCancel');
+    const modalConfirm = $('modalConfirm');
+    const modalClose = $('modalClose');
+    let modalConfirmHandler = null;
+
+    function openModal({ title, body, confirmText='Confirmar', cancelText='Cancelar', onConfirm }){
+      modalTitle.textContent = title || '';
+      modalBody.innerHTML = '';
+      if(typeof body === 'string') modalBody.innerHTML = body; else if(body) modalBody.appendChild(body);
+      modalConfirm.textContent = confirmText || 'Confirmar';
+      modalCancel.textContent = cancelText || 'Cancelar';
+      modalConfirmHandler = onConfirm || null;
+      modalEl.classList.remove('hidden');
+      modalEl.setAttribute('aria-hidden','false');
+    }
+    function closeModal(){
+      modalEl.classList.add('hidden');
+      modalEl.setAttribute('aria-hidden','true');
+      modalConfirmHandler = null;
+    }
+    modalCancel.onclick = closeModal;
+    modalClose.onclick = closeModal;
+    modalEl.addEventListener('click', (e)=>{ if(e.target === modalEl) closeModal(); });
+    modalConfirm.onclick = async ()=>{ if(modalConfirmHandler) await modalConfirmHandler(); };
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
     function buildLabel(title,code,index){
       const card=document.createElement('div');card.className='label-card';
       
@@ -126,44 +168,13 @@
       const actions=document.createElement('div');actions.className='label-actions';
       
       const edit=document.createElement('button');edit.textContent='✏️ Editar';edit.className='btn btn-small btn-secondary';
-      edit.onclick=async ()=>{
-        const nuevoNombre=prompt('Nuevo nombre para '+code,state.rows[index].art);
-        if(nuevoNombre!==null){
-          try{
-            const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({art:nuevoNombre})});
-            state.rows[index].art = updated.art;
-            head.textContent = updated.art;
-          }catch(e){ alert('Error al actualizar: '+e.message); }
-        }
-      };
+      edit.onclick=()=>{ showEditNameModal(index, head, code); };
       
       const editCode=document.createElement('button');editCode.textContent='🔢 Código';editCode.className='btn btn-small btn-secondary';
-      editCode.onclick=async ()=>{
-        const actual = state.rows[index].code;
-        const nuevoCodigo = prompt('Nuevo código de barras para '+actual, actual);
-        if(nuevoCodigo!==null){
-          const trimmed = nuevoCodigo.trim();
-          if(!trimmed) { alert('El código no puede estar vacío'); return; }
-          try{
-            const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({code:trimmed})});
-            state.rows[index].code = updated.code;
-            foot.textContent = updated.code;
-            body.innerHTML='';
-            body.appendChild(makeCode(updated.code));
-          }catch(e){ alert('Error al actualizar código: '+e.message); }
-        }
-      };
+      editCode.onclick=()=>{ showEditCodeModal(index, body, foot); };
       
       const deleteBtn=document.createElement('button');deleteBtn.textContent='🗑️';deleteBtn.className='btn btn-small btn-danger';
-      deleteBtn.onclick=async ()=>{
-        if(confirm('¿Eliminar la etiqueta "'+title+'"?')){
-          try{
-            await api('/api/labels/'+state.rows[index].id,{method:'DELETE'});
-            state.rows.splice(index,1);
-            renderAll();
-          }catch(e){ alert('Error al eliminar: '+e.message); }
-        }
-      };
+      deleteBtn.onclick=()=>{ showDeleteModal(index, title); };
       
       actions.append(edit,editCode,deleteBtn);
       card.append(head,body,foot,actions);
@@ -211,7 +222,6 @@
     async function addBatch(){
       const item=$('item').value.trim();
       const count=Number($('count').value)||1;
-      if(!item){ alert('Ingresá el nombre del artículo'); return; }
       try{
         const resp = await api('/api/labels/generate',{method:'POST',body:JSON.stringify({count,item})});
         state.rows.push(...resp.added);
@@ -221,32 +231,72 @@
       }catch(e){ alert('Error al generar: '+e.message); }
     }
 
-    async function saveConfig(){
-      const prefix=$('prefix').value.trim();
-      const digits=Number($('digits').value)||4;
-      const next=Number($('next').value)||1;
-      try{
-        const meta = await api('/api/state',{method:'PATCH',body:JSON.stringify({prefix,digits,next})});
-        state.meta = meta;
-        alert('Configuración actualizada');
-      }catch(e){ alert('Error al guardar configuración: '+e.message); }
+    // Modales específicos
+    function showEditNameModal(index, headEl, code){
+      const wrap=document.createElement('div');
+      const label=document.createElement('label');label.className='form-label';label.textContent='Nuevo nombre';
+      const input=document.createElement('input');input.type='text';input.className='form-input modal-input';input.value=state.rows[index].art||'';
+      const help=document.createElement('div');help.className='text-muted';help.style.fontSize='0.8rem';help.textContent='Puedes dejarlo vacío para que se genere automáticamente.';
+      const error=document.createElement('div');error.className='modal-error';error.style.display='none';
+      wrap.append(label,input,help,error);
+      openModal({ title:'Editar nombre ('+code+')', body:wrap, confirmText:'Guardar', onConfirm: async ()=>{
+        const v=input.value.trim();
+        try{
+          const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({art:v})});
+          state.rows[index].art = updated.art; headEl.textContent = updated.art || ''; closeModal();
+        }catch(e){ error.textContent = 'Error: '+e.message; error.style.display='block'; }
+      }});
     }
 
-    async function reset(){
-      if(!confirm('Esto eliminará todas las etiquetas y reiniciará el correlativo. ¿Continuar?')) return;
-      try{
-        const resp = await api('/api/labels',{method:'DELETE'});
-        state.rows = [];
-        state.meta = resp.state;
-        $('prefix').value = state.meta.prefix;
-        $('digits').value = state.meta.digits;
-        $('next').value = state.meta.next;
-        renderAll();
-      }catch(e){ alert('Error al reiniciar: '+e.message); }
+    function showEditCodeModal(index, bodyEl, footEl){
+      const wrap=document.createElement('div');
+      const label=document.createElement('label');label.className='form-label';label.textContent='Nuevo código de barras';
+      const input=document.createElement('input');input.type='text';input.className='form-input modal-input';input.value=state.rows[index].code||'';
+      const help=document.createElement('div');help.className='text-muted';help.style.fontSize='0.8rem';help.textContent='Debe ser único y no vacío.';
+      const error=document.createElement('div');error.className='modal-error';error.style.display='none';
+      wrap.append(label,input,help,error);
+      openModal({ title:'Editar código', body:wrap, confirmText:'Guardar', onConfirm: async ()=>{
+        const v=input.value.trim();
+        if(!v){ error.textContent='El código no puede estar vacío'; error.style.display='block'; return; }
+        try{
+          const updated = await api('/api/labels/'+state.rows[index].id,{method:'PUT',body:JSON.stringify({code:v})});
+          state.rows[index].code = updated.code; footEl.textContent = updated.code; bodyEl.innerHTML=''; bodyEl.appendChild(makeCode(updated.code)); closeModal();
+        }catch(e){ error.textContent = 'Error: '+e.message; error.style.display='block'; }
+      }});
     }
+
+    function showDeleteModal(index, title){
+      const wrap=document.createElement('div');
+      const p=document.createElement('p');p.textContent='¿Eliminar la etiqueta "'+title+'"? Esta acción no se puede deshacer.';
+      wrap.append(p);
+      openModal({ title:'Confirmar eliminación', body:wrap, confirmText:'Eliminar', cancelText:'Cancelar', onConfirm: async ()=>{
+        try{
+          await api('/api/labels/'+state.rows[index].id,{method:'DELETE'});
+          state.rows.splice(index,1); renderAll(); closeModal();
+        }catch(e){ p.textContent='Error al eliminar: '+e.message; }
+      }});
+    }
+
+    $('add').onclick=addBatch;
+    $('print').onclick=()=>window.print();
+    $('exportPdf').onclick=exportPDF;
+
+    // Ya no es editable ni se guarda el prefijo
+    $('digits').addEventListener('change', saveConfig);
+    $('next').addEventListener('change', saveConfig);
+
+    // Inicio
+    (async ()=>{ await syncState(); await syncLabels(); })();
 
     async function exportPDF(){
-      if(!state.rows.length){alert('Agregá etiquetas primero');return;}
+      if(!state.rows.length){
+        // Usar modal para feedback amigable
+        const body=document.createElement('div');
+        const p=document.createElement('p'); p.textContent='Agrega etiquetas antes de exportar.';
+        body.append(p);
+        openModal({ title:'Sin etiquetas', body, confirmText:'Entendido', cancelText:'Cerrar', onConfirm: ()=>{ closeModal(); } });
+        return;
+      }
       const {jsPDF}=window.jspdf;
       const pdf=new jsPDF();
       const canvas=await html2canvas($('preview'));
@@ -258,17 +308,19 @@
       pdf.save('etiquetas.pdf');
     }
 
-    $('add').onclick=addBatch;
-    $('reset').onclick=reset;
-    $('print').onclick=()=>window.print();
-    $('exportPdf').onclick=exportPDF;
-
-    $('prefix').addEventListener('change', saveConfig);
-    $('digits').addEventListener('change', saveConfig);
-    $('next').addEventListener('change', saveConfig);
-
-    // Inicio
-    (async ()=>{ await syncState(); await syncLabels(); })();
+    async function saveConfig(){
+      const digits=Number($('digits').value)||5;
+      const next=Number($('next').value)||1;
+      try{
+        const meta = await api('/api/state',{method:'PATCH',body:JSON.stringify({digits,next})});
+        state.meta = meta;
+        // feedback ligero
+      }catch(e){
+        const body=document.createElement('div');
+        body.textContent='Error al guardar configuración: '+e.message;
+        openModal({ title:'Configuración', body, confirmText:'Cerrar', cancelText:'Cancelar', onConfirm: ()=>closeModal() });
+      }
+    }
   </script>
 </body>
 </html>

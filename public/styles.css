@@ -483,3 +483,67 @@ header h1 {
 .gap-4 {
   gap: var(--space-4);
 }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  z-index: 1000;
+}
+.hidden { display: none; }
+
+.modal-dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 520px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+.modal-title { font-weight: 700; }
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: var(--space-6);
+  display: grid;
+  gap: var(--space-3);
+}
+.modal-actions {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.modal-error { color: var(--danger); font-size: 0.85rem; }
+.modal-input { width: 100%; }
+.text-muted { color: var(--text-light); }
+
+.label-actions {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+  justify-content: center;
+}

@@ -3,7 +3,24 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const PORT = process.env.PORT || 3201;
+// Permite puerto por argumento CLI: --port=3215 o --port 3215
+function getPortFromArgs() {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--port' && argv[i + 1]) {
+      const n = parseInt(argv[i + 1], 10);
+      if (!Number.isNaN(n)) return n;
+    }
+    if (a.startsWith('--port=')) {
+      const v = a.split('=')[1];
+      const n = parseInt(v, 10);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return null;
+}
+const PORT = getPortFromArgs() || process.env.PORT || 3201;
 const API_KEY = process.env.API_KEY || null; // Opcional: establece una API_KEY en Dockploy para proteger el acceso
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
@@ -13,7 +30,7 @@ function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
     const initial = {
-      state: { prefix: 'KIOSCO-922-', digits: 5, next: 1 },
+      state: { prefix: 'KIOSCO-922-', digits: 5, next: 1, nameSeq: 1 },
       labels: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
@@ -51,18 +68,19 @@ app.get('/api/state', (req, res) => {
 
 app.patch('/api/state', (req, res) => {
   const db = loadDB();
-  const allowed = ['prefix', 'digits', 'next'];
+  const allowed = ['digits', 'next'];
   for (const k of allowed) {
     if (k in req.body) {
       if (k === 'digits' || k === 'next') {
         const v = Number(req.body[k]);
         if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: `Valor inválido para ${k}` });
         db.state[k] = v;
-      } else if (k === 'prefix') {
-        db.state[k] = String(req.body[k]).trim();
       }
     }
   }
+  // Fuerza prefijo fijo desde servidor por seguridad
+  db.state.prefix = 'KIOSCO-922-';
+  if (typeof db.state.nameSeq !== 'number' || db.state.nameSeq < 1) db.state.nameSeq = 1;
   saveDB(db);
   res.json(db.state);
 });
@@ -76,12 +94,13 @@ app.post('/api/labels/generate', (req, res) => {
   const { count, item } = req.body || {};
   const c = Number(count) || 1;
   if (c < 1 || c > 999) return res.status(400).json({ error: 'count debe estar entre 1 y 999' });
-  const art = String(item || '').trim();
-  if (!art) art = 'Artículo sin nombre'; // Valor por defecto si no se proporciona nombre
+  let art = typeof item === 'string' ? item.trim() : '';
 
   const db = loadDB();
+  if (typeof db.state.nameSeq !== 'number' || db.state.nameSeq < 1) db.state.nameSeq = 1;
+
   const { prefix, digits } = db.state;
-  let { next } = db.state;
+  let { next, nameSeq } = db.state;
 
   const added = [];
   const now = new Date().toISOString();
@@ -91,11 +110,13 @@ app.post('/api/labels/generate', (req, res) => {
   for (let i = 0; i < c; i++) {
     const code = `${prefix}${pad(next + i, digits)}`;
     const id = nextIdStart + i;
-    added.push({ id, code, art, createdAt: now });
+    const title = art || `Articulo ${pad(nameSeq + i, 2)}`;
+    added.push({ id, code, art: title, createdAt: now });
   }
   // persistir
   db.labels.push(...added);
   db.state.next = next + c;
+  if (!art) db.state.nameSeq = nameSeq + c;
   saveDB(db);
 
   res.json({ added, state: db.state });
@@ -130,13 +151,6 @@ app.delete('/api/labels/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/labels', (req, res) => {
-  const db = loadDB();
-  db.labels = [];
-  db.state.next = 1; // reinicia correlativo
-  saveDB(db);
-  res.json({ ok: true, state: db.state });
-});
 
 // Servir frontend estático
 const PUBLIC_DIR = path.join(__dirname, 'public');
