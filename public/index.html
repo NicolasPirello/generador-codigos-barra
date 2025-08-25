@@ -298,9 +298,10 @@
         digitsInput.readOnly = true;
       }
     }
-    // Llamar loadState en el inicio
+    // Llamar loadState y syncLabels en el inicio
     window.addEventListener('DOMContentLoaded', () => {
       loadState().catch(console.error);
+      syncLabels().catch(console.error);
     });
 
     async function exportPDF(){
